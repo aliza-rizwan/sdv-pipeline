@@ -1,0 +1,4 @@
+kuksa-client
+requests
+eclipse-zenoh
+flask

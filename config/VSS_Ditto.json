@@ -1,0 +1,21 @@
+{
+  "policyId": "vehicle:car01-policy",
+  "attributes": {
+    "vehicle_model": "SDV-Simulator",
+    "iteration": "1"
+  },
+  "features": {
+    "speed": {
+      "properties": { "value": 0 }
+    },
+    "steering_angle": {
+      "properties": { "value": 0 }
+    },
+    "battery_level": {
+      "properties": { "value": 0 }
+    },
+    "fault_flag": {
+      "properties": { "value": 0 }
+    }
+  }
+}
