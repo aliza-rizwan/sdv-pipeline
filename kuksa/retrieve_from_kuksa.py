@@ -6,7 +6,7 @@ client = VSSClient("127.0.0.1", 55555)
 client.connect() 
 
 BATTERY_PATH = "Vehicle.Powertrain.TractionBattery.StateOfCharge.Displayed"
-FAULT_PATH = "Vehicle.OBD.DTCCount"
+FAULT_PATH = "Vehicle.OBD.DriveCycleStatus.DTCCount"
 
 
 def unwrap_value(value):
