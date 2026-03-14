@@ -8,6 +8,11 @@ Vehicle Data Source → Eclipse Kuksa → Middleware (Zenoh) → Eclipse Ditto �
 
 The pipeline generates simulated vehicle telemetry, writes it to Kuksa, relays current values through Zenoh, persists the latest state in Eclipse Ditto, and exposes diagnostics endpoints through a lightweight OpenSOVD-style API.
 
+### Vendored Ditto Source
+
+The `ditto-server/` directory is included directly in this repository as a vendored copy of Eclipse Ditto from `https://github.com/eclipse-ditto/ditto.git`.
+It was imported from upstream commit `afabcfbd18352aa5ad6aea02c802ef33d7882a98` so collaborators can access the Ditto server source from this repository without needing a separate clone.
+
 ### Core Components and Roles
 
 - `simulator/generate_vehicle_data.py`: Generates telemetry (`speed`, `steering_angle`, `battery_level`) and one functional modification variable (`fault_flag`).
