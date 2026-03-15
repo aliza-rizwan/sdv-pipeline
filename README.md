@@ -1,194 +1,345 @@
-# Iteration 1: Baseline SDV Pipeline (Kuksa → Zenoh → Ditto)
+# Iteration 1: Baseline SDV Pipeline (Kuksa -> Zenoh -> Ditto)
 
-This project implements an end-to-end Software-Defined Vehicle (SDV) data pipeline aligned with the baseline flow used in the reference repository:
+This project implements an end-to-end Software-Defined Vehicle (SDV) data pipeline aligned with the baseline architecture used in the SDV reference repository.
 
-Vehicle Data Source → Eclipse Kuksa → Middleware (Zenoh) → Eclipse Ditto → Monitoring API
+Vehicle Data Source -> Eclipse Kuksa -> Middleware (Zenoh) -> Eclipse Ditto -> OpenSOVD Diagnostics API
 
-## 1) Project Overview
+The goal of Iteration 1 is to demonstrate that vehicle telemetry successfully propagates through the entire SDV pipeline from the simulator to the digital twin backend and diagnostics interface.
 
-The pipeline generates simulated vehicle telemetry, writes it to Kuksa, relays current values through Zenoh, persists the latest state in Eclipse Ditto, and exposes diagnostics endpoints through a lightweight OpenSOVD-style API.
+---
 
-### Vendored Ditto Source
+# 1. Project Overview
 
-The `ditto-server/` directory is included directly in this repository as a vendored copy of Eclipse Ditto from `https://github.com/eclipse-ditto/ditto.git`.
-It was imported from upstream commit `afabcfbd18352aa5ad6aea02c802ef33d7882a98` so collaborators can access the Ditto server source from this repository without needing a separate clone.
+The system simulates vehicle telemetry and propagates it through a distributed SDV pipeline.
 
-### Core Components and Roles
+Pipeline workflow:
 
-- `simulator/generate_vehicle_data.py`: Generates telemetry (`speed`, `steering_angle`, `battery_level`) and one functional modification variable (`fault_flag`).
-- `kuksa/send_to_kuksa.py`: Pushes generated telemetry into Kuksa Databroker.
-- `kuksa/retrieve_from_kuksa.py`: Reads back telemetry from Kuksa for verification.
-- `middleware/zenoh_publisher.py`: Reads from Kuksa and publishes JSON payloads to Zenoh key `vehicle/data`.
-- `middleware/zenoh_subscriber.py`: Subscribes to Zenoh and stores latest payload in `middleware/zenoh_data.json`.
-- `ditto/create_twin.py`: Creates/updates Ditto policy and thing from config.
-- `ditto/send_to_ditto.py`: Uses reference-style Ditto helper functions and patches telemetry in Ditto.
-- `diagnostics/opensovd_server.py`: Exposes diagnostics over HTTP.
+1. Generate simulated vehicle telemetry
+2. Send telemetry to Eclipse Kuksa Databroker
+3. Retrieve signals from Kuksa
+4. Publish telemetry through Zenoh middleware
+5. Receive messages via the Zenoh subscriber
+6. Update the Eclipse Ditto digital twin
+7. Expose vehicle state through an OpenSOVD-style diagnostics API
 
-## 2) System Architecture Diagram
+Telemetry signals include:
+
+- `speed`
+- `steering_angle`
+- `battery_level`
+- `fault_flag` (Iteration 1 functional modification)
+
+---
+
+# Vendored Ditto Source
+
+The `ditto-server/` directory is included directly in this repository as a vendored copy of Eclipse Ditto.
+
+Source repository:
+
+https://github.com/eclipse-ditto/ditto.git
+
+Imported upstream commit:
+
+`afabcfbd18352aa5ad6aea02c802ef33d7882a98`
+
+This allows collaborators and graders to access the Ditto server source directly from this repository without cloning the project separately.
+
+---
+
+# 2. System Architecture Diagram
 
 ```mermaid
 flowchart LR
-	A[Vehicle Data Generator\nsimulator/generate_vehicle_data.py]
-	B[Eclipse Kuksa Databroker\nPort 55555]
-	C[Zenoh Publisher\nmiddleware/zenoh_publisher.py]
-	D[Zenoh Network\nKey: vehicle/data]
-	E[Zenoh Subscriber\nmiddleware/zenoh_subscriber.py]
-	F[Eclipse Ditto\nThing: vehicle:car01]
-	G[Diagnostics API\ndiagnostics/opensovd_server.py]
+	subgraph VehicleLayer[Vehicle Layer]
+		A[Vehicle Data Simulator\ngenerate_vehicle_data.py]
+		B[Eclipse Kuksa Databroker\nVehicle Signal Storage\nVSS Model]
+		A -->|Send telemetry signals\nspeed, steering angle, battery, fault flag| B
+	end
 
-	A -->|vehicle_data.json| B
-	B --> C
-	C --> D
-	D --> E
-	E -->|zenoh_data.json| F
-	F --> G
+	subgraph MiddlewareLayer[Middleware Layer]
+		C[Eclipse Zenoh\nDistributed Publish/Subscribe\nData Transport]
+	end
+
+	subgraph BackendLayer[Backend Digital Twin Layer]
+		D[Eclipse Ditto\nVehicle Digital Twin\nThing: vehicle:car01]
+	end
+
+	subgraph DiagnosticsLayer[Diagnostics Layer]
+		E[Eclipse OpenSOVD\nDiagnostics and Inspection API\n/diagnostics/state\n/diagnostics/faults]
+	end
+
+	B -->|Publish vehicle signals| C
+	C -->|Transport telemetry updates| D
+	D -->|Retrieve vehicle state\nand fault information| E
 ```
 
-## 3) Runtime Sequence Diagram
+Figure 1 - System Architecture Diagram
+
+# 3. Runtime Sequence Diagram
 
 ```mermaid
 sequenceDiagram
-	participant Sim as Simulator
-	participant Kuksa as Kuksa Databroker
+	participant Sim as Vehicle Data Simulator\n(generate_vehicle_data.py)
+	participant Kuksa as Eclipse Kuksa\nDatabroker
 	participant Pub as Zenoh Publisher
+	participant Net as Zenoh Network
 	participant Sub as Zenoh Subscriber
-	participant Ditto as Eclipse Ditto
-	participant API as Diagnostics API
+	participant Client as Ditto Integration Client\n(send_to_ditto.py)
+	participant Twin as Eclipse Ditto\nDigital Twin\nvehicle:car01
+	participant API as Eclipse OpenSOVD\nDiagnostics API
 
-	loop Every 1s
-		Sim->>Kuksa: set_current_values(speed, steering_angle, battery_level, fault_flag)
-		Pub->>Kuksa: get_current_values(...)
-		Pub->>Sub: publish vehicle/data JSON
-		Sub->>Sub: write middleware/zenoh_data.json
-		Ditto->>Ditto: PATCH thing features.telemetry.properties
+	loop Every 1 second (continuous telemetry update)
+		Sim->>Sim: Generate telemetry\nspeed, steering_angle,\nbattery_level, fault_flag
+		Sim->>Kuksa: Send telemetry via gRPC\nset_current_values()
+		Kuksa->>Kuksa: Store signals\nin VSS database
+		Pub->>Kuksa: get_current_values()
+		Kuksa-->>Pub: Return current signals
+		Pub->>Net: Publish JSON message\nTopic: vehicle/data
+		Net-->>Sub: Deliver telemetry message
+		Sub->>Sub: Persist latest payload\nto middleware/zenoh_data.json
+		Sub->>Client: Forward telemetry data
+		Client->>Twin: PATCH digital twin\nUpdate features:\n- speed\n- steering_angle\n- battery_level\n- fault_flag
+		Twin->>Twin: Persist updated\nvehicle state
 	end
 
-	API->>Ditto: GET /api/2/things/vehicle:car01
-	Ditto-->>API: telemetry properties JSON
+	API->>Twin: GET vehicle digital twin
+	Twin-->>API: Return telemetry\nand fault state
 ```
 
-## 4) Functional Modification (Iteration 1 Requirement)
+Figure 2 - Sequence diagram illustrating runtime interaction between system components.
 
-Implemented modification: **simulated sensor fault flag** (`fault_flag`).
+# 4. Functional Modification (Iteration 1 Requirement)
 
-- Added at the data source (`simulator/generate_vehicle_data.py`).
-- Propagated through Kuksa, Zenoh, and Ditto.
-- Exposed by diagnostics endpoint `/diagnostics/faults`.
+Iteration 1 requires implementing at least one functional modification.
 
-## 5) Prerequisites
+Implemented modification:
+
+Simulated sensor fault flag (`fault_flag`)
+
+Location:
+
+`simulator/generate_vehicle_data.py`
+
+Behavior:
+
+- Randomly generates simulated sensor faults
+- Propagates through the entire pipeline
+- Stored in the Ditto digital twin
+- Exposed through diagnostics endpoint `/diagnostics/faults`
+
+# 5. Repository Structure
+
+```text
+sdv-pipeline/
+|
+|-- simulator/
+|   `-- generate_vehicle_data.py
+|
+|-- kuksa/
+|   |-- send_to_kuksa.py
+|   `-- retrieve_from_kuksa.py
+|
+|-- middleware/
+|   |-- zenoh_publisher.py
+|   |-- zenoh_subscriber.py
+|   `-- zenoh_data.json
+|
+|-- ditto/
+|   |-- create_twin.py
+|   `-- send_to_ditto.py
+|
+|-- diagnostics/
+|   `-- opensovd_server.py
+|
+|-- config/
+|   |-- policy.json
+|   `-- VSS_Ditto.json
+|
+`-- requirements.txt
+```
+
+# 6. Prerequisites
+
+Required software:
 
 - Python 3.11+
-- Docker Desktop (for Kuksa and Ditto)
-- Running services:
-  - Kuksa Databroker on `127.0.0.1:55555`
-  - Eclipse Ditto on `http://localhost:8080`
+- Docker Desktop
+- Zenoh Python library
+- Running Kuksa Databroker
+- Running Eclipse Ditto
 
-Install Python dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 6) Start External Services
+# 7. Start External Services
 
-### Start Kuksa Databroker (example)
+## Start Kuksa Databroker
+
+Example command:
 
 ```bash
 docker run --rm -it -p 55555:55555 -v "${PWD}/OBD.json:/OBD.json" ghcr.io/eclipse-kuksa/kuksa-databroker:main --insecure --vss /OBD.json
 ```
 
-### Start Eclipse Ditto
+### Windows Note
 
-Use the Ditto Docker deployment (`deployment/docker`) and confirm:
+On Windows systems Kuksa runs on:
 
-- `http://localhost:8080` is reachable
-- basic auth credentials: `ditto` / `ditto`
+`127.0.0.1:55555`
 
-## 7) Run Pipeline (Order)
+Make sure port `55555` is available and not blocked by your firewall.
 
-Open separate terminals from project root:
+## Start Eclipse Ditto
 
-1. Generate source data
+Use the Ditto Docker deployment located in:
+
+`ditto-server/deployment/docker`
+
+Verify Ditto is accessible:
+
+`http://localhost:8080`
+
+Default credentials:
+
+- Username: `ditto`
+- Password: `ditto`
+
+# 8. Run the Pipeline
+
+Open separate terminals and run the following commands.
+
+## Generate simulated telemetry
 
 ```bash
 python simulator/generate_vehicle_data.py
 ```
 
-2. Send source data to Kuksa
+## Send telemetry to Kuksa
 
 ```bash
 python kuksa/send_to_kuksa.py
 ```
 
-3. (Optional) Verify reads from Kuksa
+## Verify Kuksa retrieval
 
 ```bash
 python kuksa/retrieve_from_kuksa.py
 ```
 
-4. Create Ditto thing and policy
-
-```bash
-python ditto/create_twin.py
-```
-
-5. Publish Kuksa data to Zenoh
+## Publish telemetry to Zenoh
 
 ```bash
 python middleware/zenoh_publisher.py
 ```
 
-6. Subscribe and persist latest Zenoh payload
+## Subscribe to Zenoh messages
 
 ```bash
 python middleware/zenoh_subscriber.py
 ```
 
-7. Push middleware payload into Ditto
+## Create Ditto digital twin
+
+```bash
+python ditto/create_twin.py
+```
+
+## Update Ditto digital twin
 
 ```bash
 python ditto/send_to_ditto.py
 ```
 
-8. Start diagnostics API
+## Start OpenSOVD diagnostics server
 
 ```bash
 python diagnostics/opensovd_server.py
 ```
 
-## 8) Verification and Evidence Collection
+# 9. API Access and Diagnostics
 
-Iteration 1 asks for proof that data flows end-to-end. Collect evidence from:
+Once the pipeline is running, vehicle state can be accessed through the diagnostics API.
 
-1. **Kuksa logs/output**
-   - `Sent to Kuksa: {...}`
-   - `Retrieved from Kuksa: {...}`
+## OpenSOVD Endpoints
 
-2. **Zenoh logs/output**
-   - `Published to Zenoh: {...}`
-   - `Received from Zenoh: {...}`
+Vehicle state:
 
-3. **Ditto update logs/output**
-   - `Updated Ditto: {...}`
+`http://localhost:5001/diagnostics/state`
 
-4. **API output**
+Vehicle fault information:
+
+`http://localhost:5001/diagnostics/faults`
+
+Example query:
+
+```bash
+curl http://localhost:5001/diagnostics/state
+```
+
+Example response:
+
+```json
+{
+	"speed": 51,
+	"steering_angle": 24,
+	"battery_level": 31,
+	"fault_flag": 1
+}
+```
+
+# 10. Direct Ditto API Queries
+
+The digital twin can also be queried directly from Ditto.
+
+```bash
+curl -u ditto:ditto http://localhost:8080/api/2/things/vehicle:car01
+```
+
+This returns the full digital twin state.
+
+# 11. Verification and Evidence Collection
+
+Iteration 1 requires proof that telemetry flows through the entire system.
+
+Evidence can be collected from:
+
+## Kuksa logs
+
+- `Sent to Kuksa: {...}`
+- `Retrieved from Kuksa: {...}`
+
+## Zenoh logs
+
+- `Published to Zenoh: {...}`
+- `Received from Zenoh: {...}`
+
+## Ditto updates
+
+- `Updated Ditto: {...}`
+
+## Diagnostics API output
 
 ```bash
 curl http://localhost:5001/diagnostics/state
 curl http://localhost:5001/diagnostics/faults
 ```
 
-Expected behavior: changing telemetry values at the simulator appears in Kuksa, then in Zenoh payload, then in Ditto thing `vehicle:car01`, and finally through diagnostics endpoints.
+Expected behavior:
 
-## 9) Configuration Files
+Telemetry values generated by the simulator appear sequentially in:
 
-- `config/policy.json`: Ditto policy definition.
-- `config/VSS_Ditto.json`: Ditto thing template used for initialization.
+Simulator -> Kuksa -> Zenoh -> Ditto -> Diagnostics API
 
-## 10) Iteration 1 Deliverable Coverage
+# 12. Configuration Files
 
-- Updated architecture diagram: included in Section 2.
-- Sequence diagram: included in Section 3.
-- SDV components and roles: Section 1.
-- Evidence of data flow: Section 8 (logs + API checks).
-- Functional modification description: Section 4 (`fault_flag`).
+`config/policy.json`
+
+Defines Ditto access policy.
+
+`config/VSS_Ditto.json`
+
+Defines the Ditto thing template used for digital twin initialization.
