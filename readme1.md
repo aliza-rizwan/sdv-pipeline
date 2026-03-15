@@ -51,47 +51,63 @@ This allows collaborators and graders to access the Ditto server source directly
 
 ```mermaid
 flowchart LR
-		A[Vehicle Data Simulator\nsimulator/generate_vehicle_data.py]
-		B[Eclipse Kuksa Databroker\nVehicle Signal Storage\nPort 55555]
-		C[Zenoh Publisher\nmiddleware/zenoh_publisher.py]
-		D[Zenoh Network\nKey: vehicle/data]
-		E[Zenoh Subscriber\nmiddleware/zenoh_subscriber.py]
-		F[Eclipse Ditto\nDigital Twin\nvehicle:car01]
-		G[OpenSOVD Diagnostics API\ndiagnostics/opensovd_server.py]
+	subgraph VehicleLayer[Vehicle Layer]
+		A[Vehicle Data Simulator\ngenerate_vehicle_data.py]
+		B[Eclipse Kuksa Databroker\nVehicle Signal Storage\nVSS Model]
+		A -->|Send telemetry signals\nspeed, steering angle, battery, fault flag| B
+	end
 
-		A -->|vehicle_data.json| B
-		B --> C
-		C --> D
-		D --> E
-		E -->|zenoh_data.json| F
-		F --> G
+	subgraph MiddlewareLayer[Middleware Layer]
+		C[Eclipse Zenoh\nDistributed Publish/Subscribe\nData Transport]
+	end
+
+	subgraph BackendLayer[Backend Digital Twin Layer]
+		D[Eclipse Ditto\nVehicle Digital Twin\nThing: vehicle:car01]
+	end
+
+	subgraph DiagnosticsLayer[Diagnostics Layer]
+		E[Eclipse OpenSOVD\nDiagnostics and Inspection API\n/diagnostics/state\n/diagnostics/faults]
+	end
+
+	B -->|Publish vehicle signals| C
+	C -->|Transport telemetry updates| D
+	D -->|Retrieve vehicle state\nand fault information| E
 ```
+
+Figure 1 - System Architecture Diagram
 
 # 3. Runtime Sequence Diagram
 
 ```mermaid
 sequenceDiagram
-		participant Sim as Simulator
-		participant Kuksa as Kuksa
-		participant Pub as Zenoh Publisher
-		participant Net as Zenoh Network
-		participant Sub as Zenoh Subscriber
-		participant Ditto as Eclipse Ditto
-		participant API as Diagnostics API
+	participant Sim as Vehicle Data Simulator\n(generate_vehicle_data.py)
+	participant Kuksa as Eclipse Kuksa\nDatabroker
+	participant Pub as Zenoh Publisher
+	participant Net as Zenoh Network
+	participant Sub as Zenoh Subscriber
+	participant Client as Ditto Integration Client\n(send_to_ditto.py)
+	participant Twin as Eclipse Ditto\nDigital Twin\nvehicle:car01
+	participant API as Eclipse OpenSOVD\nDiagnostics API
 
-		loop Every second
-				Sim->>Sim: Generate speed, steering_angle, battery_level, fault_flag
-				Sim->>Kuksa: Write current vehicle signals
-				Pub->>Kuksa: Read current signals
-				Pub->>Net: Publish vehicle/data payload
-				Net->>Sub: Deliver JSON payload
-				Sub->>Sub: Write middleware/zenoh_data.json
-				Ditto->>Ditto: PATCH thing features from zenoh_data.json
-		end
+	loop Every 1 second (continuous telemetry update)
+		Sim->>Sim: Generate telemetry\nspeed, steering_angle,\nbattery_level, fault_flag
+		Sim->>Kuksa: Send telemetry via gRPC\nset_current_values()
+		Kuksa->>Kuksa: Store signals\nin VSS database
+		Pub->>Kuksa: get_current_values()
+		Kuksa-->>Pub: Return current signals
+		Pub->>Net: Publish JSON message\nTopic: vehicle/data
+		Net-->>Sub: Deliver telemetry message
+		Sub->>Sub: Persist latest payload\nto middleware/zenoh_data.json
+		Sub->>Client: Forward telemetry data
+		Client->>Twin: PATCH digital twin\nUpdate features:\n- speed\n- steering_angle\n- battery_level\n- fault_flag
+		Twin->>Twin: Persist updated\nvehicle state
+	end
 
-		API->>Ditto: GET /api/2/things/vehicle:car01
-		Ditto-->>API: Current twin state
+	API->>Twin: GET vehicle digital twin
+	Twin-->>API: Return telemetry\nand fault state
 ```
+
+Figure 2 - Sequence diagram illustrating runtime interaction between system components.
 
 # 4. Functional Modification (Iteration 1 Requirement)
 
