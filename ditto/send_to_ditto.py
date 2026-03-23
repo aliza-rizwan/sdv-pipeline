@@ -122,6 +122,18 @@ def main():
                     },
                     "fault_flag": {
                         "properties": {"value": payload["fault_flag"]}
+                    },
+                    "vehicle_id": {
+                        "properties": {"value": payload.get("vehicle_id", "car01")}
+                    },
+                    "sequence": {
+                        "properties": {"value": payload.get("sequence", 0)}
+                    },
+                    "generated_at_ms": {
+                        "properties": {"value": payload.get("generated_at_ms", 0)}
+                    },
+                    "middleware_received_at_ms": {
+                        "properties": {"value": payload.get("middleware_received_at_ms", 0)}
                     }
                 }
             }
@@ -134,7 +146,7 @@ def main():
 
         except requests.RequestException as exc:
             print(f"Ditto connection error: {exc}")
-        except (OSError, json.JSONDecodeError, ValueError) as exc:
+        except (OSError, json.JSONDecodeError) as exc:
             print(f"Telemetry read error: {exc}")
 
         time.sleep(1)

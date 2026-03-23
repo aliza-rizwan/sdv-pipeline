@@ -1,87 +1,91 @@
-# Iteration 1: Baseline SDV Pipeline (Kuksa → Zenoh → Ditto)
+# Iteration 2: SDV Pipeline Extension, Validation, and Evaluation
 
-This project implements an end-to-end Software-Defined Vehicle (SDV) data pipeline aligned with the baseline flow used in the reference repository:
+This repository contains an end-to-end Software-Defined Vehicle (SDV) data pipeline:
 
-Vehicle Data Source → Eclipse Kuksa → Middleware (Zenoh) → Eclipse Ditto → Monitoring API
+Simulator -> Kuksa Databroker -> Zenoh Middleware -> Eclipse Ditto Digital Twin -> OpenSOVD-style Diagnostics API
 
-## 1) Project Overview
+Iteration 2 extends the Iteration 1 baseline with communication fault injection and measurable latency instrumentation, then adds reproducible scripts for functional and non-functional evaluation.
 
-The pipeline generates simulated vehicle telemetry, writes it to Kuksa, relays current values through Zenoh, persists the latest state in Eclipse Ditto, and exposes diagnostics endpoints through a lightweight OpenSOVD-style API.
+## 1. What Was Extended in Iteration 2
 
-### Vendored Ditto Source
+Implemented extension (least-complex, high-value):
 
-The `ditto-server/` directory is included directly in this repository as a vendored copy of Eclipse Ditto from `https://github.com/eclipse-ditto/ditto.git`.
-It was imported from upstream commit `afabcfbd18352aa5ad6aea02c802ef33d7882a98` so collaborators can access the Ditto server source from this repository without needing a separate clone.
+1. Middleware fault injection
+- Location: middleware/zenoh_subscriber.py
+- New behavior:
+  - Configurable message drop probability with ZENOH_DROP_PROB
+  - Configurable artificial delay with ZENOH_DELAY_MS
 
-### Core Components and Roles
+2. End-to-end telemetry instrumentation
+- Locations:
+  - simulator/generate_vehicle_data.py
+  - middleware/zenoh_publisher.py
+  - middleware/zenoh_subscriber.py
+  - ditto/send_to_ditto.py
+  - diagnostics/opensovd_server.py
+- New telemetry metadata:
+  - vehicle_id
+  - sequence
+  - generated_at_ms
+  - middleware_received_at_ms
+- Diagnostics now returns computed end_to_end_latency_ms when generated_at_ms is present.
 
-- `simulator/generate_vehicle_data.py`: Generates telemetry (`speed`, `steering_angle`, `battery_level`) and one functional modification variable (`fault_flag`).
-- `kuksa/send_to_kuksa.py`: Pushes generated telemetry into Kuksa Databroker.
-- `kuksa/retrieve_from_kuksa.py`: Reads back telemetry from Kuksa for verification.
-- `middleware/zenoh_publisher.py`: Reads from Kuksa and publishes JSON payloads to Zenoh key `vehicle/data`.
-- `middleware/zenoh_subscriber.py`: Subscribes to Zenoh and stores latest payload in `middleware/zenoh_data.json`.
-- `ditto/create_twin.py`: Creates/updates Ditto policy and thing from config.
-- `ditto/send_to_ditto.py`: Uses reference-style Ditto helper functions and patches telemetry in Ditto.
-- `diagnostics/opensovd_server.py`: Exposes diagnostics over HTTP.
+3. Load control
+- Location: simulator/generate_vehicle_data.py
+- New behavior:
+  - Configurable simulator update interval with SIM_INTERVAL_SEC for higher-rate tests.
 
-## 2) System Architecture Diagram
+## 2. Updated Architecture (Iteration 2)
 
 ```mermaid
 flowchart LR
-	A[Vehicle Data Generator\nsimulator/generate_vehicle_data.py]
-	B[Eclipse Kuksa Databroker\nPort 55555]
-	C[Zenoh Publisher\nmiddleware/zenoh_publisher.py]
-	D[Zenoh Network\nKey: vehicle/data]
-	E[Zenoh Subscriber\nmiddleware/zenoh_subscriber.py]
-	F[Eclipse Ditto\nThing: vehicle:car01]
-	G[Diagnostics API\ndiagnostics/opensovd_server.py]
+    A[Vehicle Simulator\n generate_vehicle_data.py] --> B[Kuksa Databroker]
+    B --> C[Zenoh Publisher\n merges telemetry + metadata]
+    C --> D[Zenoh Subscriber\n fault injector\n drop/delay]
+    D --> E[Ditto Updater\n send_to_ditto.py]
+    E --> F[Eclipse Ditto Thing\n vehicle:car01]
+    F --> G[Diagnostics API\n opensovd_server.py]
 
-	A -->|vehicle_data.json| B
-	B --> C
-	C --> D
-	D --> E
-	E -->|zenoh_data.json| F
-	F --> G
+    H[Experiment Scripts\n experiments/*.py] --> G
+    H --> F
 ```
 
-## 3) Runtime Sequence Diagram
+## 3. Repository Structure (Core)
 
-```mermaid
-sequenceDiagram
-	participant Sim as Simulator
-	participant Kuksa as Kuksa Databroker
-	participant Pub as Zenoh Publisher
-	participant Sub as Zenoh Subscriber
-	participant Ditto as Eclipse Ditto
-	participant API as Diagnostics API
-
-	loop Every 1s
-		Sim->>Kuksa: set_current_values(speed, steering_angle, battery_level, fault_flag)
-		Pub->>Kuksa: get_current_values(...)
-		Pub->>Sub: publish vehicle/data JSON
-		Sub->>Sub: write middleware/zenoh_data.json
-		Ditto->>Ditto: PATCH thing features.telemetry.properties
-	end
-
-	API->>Ditto: GET /api/2/things/vehicle:car01
-	Ditto-->>API: telemetry properties JSON
+```text
+sdv-pipeline/
+|-- simulator/
+|   `-- generate_vehicle_data.py
+|-- kuksa/
+|   |-- send_to_kuksa.py
+|   `-- retrieve_from_kuksa.py
+|-- middleware/
+|   |-- zenoh_publisher.py
+|   |-- zenoh_subscriber.py
+|   `-- zenoh_data.json
+|-- ditto/
+|   |-- create_twin.py
+|   `-- send_to_ditto.py
+|-- diagnostics/
+|   `-- opensovd_server.py
+|-- experiments/
+|   |-- validate_pipeline.py
+|   |-- run_latency_experiment.py
+|   |-- compare_latency_results.py
+|   `-- results/
+|-- config/
+|   |-- VSS_Ditto.json
+|   `-- policy.json
+`-- requirements.txt
 ```
 
-## 4) Functional Modification (Iteration 1 Requirement)
+## 4. Prerequisites
 
-Implemented modification: **simulated sensor fault flag** (`fault_flag`).
-
-- Added at the data source (`simulator/generate_vehicle_data.py`).
-- Propagated through Kuksa, Zenoh, and Ditto.
-- Exposed by diagnostics endpoint `/diagnostics/faults`.
-
-## 5) Prerequisites
-
+Required software:
 - Python 3.11+
-- Docker Desktop (for Kuksa and Ditto)
-- Running services:
-  - Kuksa Databroker on `127.0.0.1:55555`
-  - Eclipse Ditto on `http://localhost:8080`
+- Docker Desktop
+- Running Kuksa Databroker
+- Running Eclipse Ditto
 
 Install Python dependencies:
 
@@ -89,7 +93,7 @@ Install Python dependencies:
 pip install -r requirements.txt
 ```
 
-## 6) Start External Services
+## 5. Start External Services
 
 ### Start Kuksa Databroker (example)
 
@@ -99,96 +103,165 @@ docker run --rm -it -p 55555:55555 -v "${PWD}/OBD.json:/OBD.json" ghcr.io/eclips
 
 ### Start Eclipse Ditto
 
-Use the Ditto Docker deployment (`deployment/docker`) and confirm:
+Use deployment files in ditto-server/deployment/docker.
 
-- `http://localhost:8080` is reachable
-- basic auth credentials: `ditto` / `ditto`
+Verify:
 
-## 7) Run Pipeline (Order)
+```text
+http://localhost:8080
+```
 
-Open separate terminals from project root:
+Default credentials:
+- username: ditto
+- password: ditto
 
-1. Generate source data
+## 6. Run the Pipeline
+
+Open separate terminals in repository root and run:
 
 ```bash
 python simulator/generate_vehicle_data.py
-```
-
-2. Send source data to Kuksa
-
-```bash
 python kuksa/send_to_kuksa.py
-```
-
-3. (Optional) Verify reads from Kuksa
-
-```bash
 python kuksa/retrieve_from_kuksa.py
-```
-
-4. Create Ditto thing and policy
-
-```bash
-python ditto/create_twin.py
-```
-
-5. Publish Kuksa data to Zenoh
-
-```bash
 python middleware/zenoh_publisher.py
-```
-
-6. Subscribe and persist latest Zenoh payload
-
-```bash
 python middleware/zenoh_subscriber.py
-```
-
-7. Push middleware payload into Ditto
-
-```bash
+python ditto/create_twin.py
 python ditto/send_to_ditto.py
-```
-
-8. Start diagnostics API
-
-```bash
 python diagnostics/opensovd_server.py
 ```
 
-## 8) Verification and Evidence Collection
+## 7. Iteration 2 Configuration Knobs
 
-Iteration 1 asks for proof that data flows end-to-end. Collect evidence from:
+Set these environment variables before starting related processes.
 
-1. **Kuksa logs/output**
-   - `Sent to Kuksa: {...}`
-   - `Retrieved from Kuksa: {...}`
+### Simulator load
 
-2. **Zenoh logs/output**
-   - `Published to Zenoh: {...}`
-   - `Received from Zenoh: {...}`
-
-3. **Ditto update logs/output**
-   - `Updated Ditto: {...}`
-
-4. **API output**
+- SIM_INTERVAL_SEC
+  - Default: 1.0
+  - Example (5 Hz):
 
 ```bash
-curl http://localhost:5001/diagnostics/state
-curl http://localhost:5001/diagnostics/faults
+# PowerShell
+$env:SIM_INTERVAL_SEC="0.2"
+python simulator/generate_vehicle_data.py
 ```
 
-Expected behavior: changing telemetry values at the simulator appears in Kuksa, then in Zenoh payload, then in Ditto thing `vehicle:car01`, and finally through diagnostics endpoints.
+### Middleware fault injection
 
-## 9) Configuration Files
+- ZENOH_DROP_PROB
+  - Default: 0.0
+  - Example: 0.20 means 20% messages dropped at middleware
+- ZENOH_DELAY_MS
+  - Default: 0
+  - Example: 150 adds 150 ms delay before subscriber writes payload
 
-- `config/policy.json`: Ditto policy definition.
-- `config/VSS_Ditto.json`: Ditto thing template used for initialization.
+```bash
+# PowerShell
+$env:ZENOH_DROP_PROB="0.20"
+$env:ZENOH_DELAY_MS="150"
+python middleware/zenoh_subscriber.py
+```
 
-## 10) Iteration 1 Deliverable Coverage
+## 8. Functional Validation (Iteration 2 Requirement)
 
-- Updated architecture diagram: included in Section 2.
-- Sequence diagram: included in Section 3.
-- SDV components and roles: Section 1.
-- Evidence of data flow: Section 8 (logs + API checks).
-- Functional modification description: Section 4 (`fault_flag`).
+### A. Manual API check
+
+```bash
+curl http://127.0.0.1:5001/diagnostics/state
+```
+
+Expected fields:
+- speed
+- steering_angle
+- battery_level
+- fault_flag
+- vehicle_id
+- sequence
+- generated_at_ms
+- middleware_received_at_ms
+- end_to_end_latency_ms (when timestamp available)
+
+### B. Automated functional validation
+
+```bash
+python experiments/validate_pipeline.py --samples 10 --interval 1.0
+```
+
+Pass criteria:
+- all required fields are present
+- sequence is valid and non-regressive
+- diagnostics endpoint remains responsive
+
+## 9. Non-Functional Experiment: Latency Measurement
+
+This project provides a simple reproducible experiment to measure end-to-end latency.
+
+### Step 1: Baseline run (no middleware faults)
+
+```bash
+$env:ZENOH_DROP_PROB="0.0"
+$env:ZENOH_DELAY_MS="0"
+python experiments/run_latency_experiment.py --label baseline --samples 30
+```
+
+### Step 2: Modified run (fault injection active)
+
+```bash
+$env:ZENOH_DROP_PROB="0.20"
+$env:ZENOH_DELAY_MS="150"
+python experiments/run_latency_experiment.py --label fault_injection --samples 30
+```
+
+### Step 3: Compare results and generate table/chart markdown
+
+```bash
+python experiments/compare_latency_results.py --baseline experiments/results/latency_samples_baseline.csv --modified experiments/results/latency_samples_fault_injection.csv --output experiments/results/latency_comparison.md
+```
+
+Generated artifacts:
+- experiments/results/latency_samples_baseline.csv
+- experiments/results/latency_samples_fault_injection.csv
+- experiments/results/latency_summary_baseline.md
+- experiments/results/latency_summary_fault_injection.md
+- experiments/results/latency_comparison.md
+
+These markdown outputs include table and Mermaid chart content for report inclusion.
+
+## 10. Deliverables Mapping (Iteration 2)
+
+1. Updated architecture diagram
+- Included above in this README.
+
+2. Description of system extension
+- Section 1.
+
+3. Evidence of functional validation
+- Logs from pipeline scripts
+- diagnostics/state output
+- experiments/validate_pipeline.py output
+
+4. Non-functional experiment results
+- CSV and markdown artifacts in experiments/results/
+
+5. Written analysis
+- Use ITERATION2_REPORT.md template and fill measured values.
+
+6. Demo video (3-5 min)
+- Show baseline and fault-injection runs, then show generated results files and diagnostics endpoint.
+
+7. Updated GitHub repository
+- Include all new scripts/config/docs from Iteration 2.
+- Add TA collaborator username: zubxxr.
+
+## 11. Diagnostics Endpoints
+
+- Vehicle state:
+  - http://127.0.0.1:5001/diagnostics/state
+- Fault view:
+  - http://127.0.0.1:5001/diagnostics/faults
+
+## 12. Notes
+
+- Keep all services on localhost defaults unless your environment requires overrides.
+- If your Kuksa model does not expose the fault path, existing fallback behavior remains in place.
+

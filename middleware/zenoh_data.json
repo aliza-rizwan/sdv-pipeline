@@ -1,1 +1,1 @@
-{"speed": 50.0, "steering_angle": -12, "battery_level": 99.0, "fault_flag": 0}
+{"speed": 49.0, "steering_angle": -21, "battery_level": 86.0, "fault_flag": 1, "vehicle_id": "car01", "sequence": 1615, "generated_at_ms": 1774232963686, "middleware_received_at_ms": 1774232963809

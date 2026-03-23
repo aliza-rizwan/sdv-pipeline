@@ -16,6 +16,18 @@
     },
     "fault_flag": {
       "properties": { "value": 0 }
+    },
+    "vehicle_id": {
+      "properties": { "value": "car01" }
+    },
+    "sequence": {
+      "properties": { "value": 0 }
+    },
+    "generated_at_ms": {
+      "properties": { "value": 0 }
+    },
+    "middleware_received_at_ms": {
+      "properties": { "value": 0 }
     }
   }
 }
