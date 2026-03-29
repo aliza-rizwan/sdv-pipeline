@@ -227,40 +227,14 @@ Generated artifacts:
 
 These markdown outputs include table and Mermaid chart content for report inclusion.
 
-## 10. Deliverables Mapping (Iteration 2)
-
-1. Updated architecture diagram
-- Included above in this README.
-
-2. Description of system extension
-- Section 1.
-
-3. Evidence of functional validation
-- Logs from pipeline scripts
-- diagnostics/state output
-- experiments/validate_pipeline.py output
-
-4. Non-functional experiment results
-- CSV and markdown artifacts in experiments/results/
-
-5. Written analysis
-- Use ITERATION2_REPORT.md template and fill measured values.
-
-6. Demo video (3-5 min)
-- Show baseline and fault-injection runs, then show generated results files and diagnostics endpoint.
-
-7. Updated GitHub repository
-- Include all new scripts/config/docs from Iteration 2.
-- Add TA collaborator username: zubxxr.
-
-## 11. Diagnostics Endpoints
+## 10. Diagnostics Endpoints
 
 - Vehicle state:
   - http://127.0.0.1:5001/diagnostics/state
 - Fault view:
   - http://127.0.0.1:5001/diagnostics/faults
 
-## 12. Notes
+## 11. Notes
 
 - Keep all services on localhost defaults unless your environment requires overrides.
 - If your Kuksa model does not expose the fault path, existing fallback behavior remains in place.
