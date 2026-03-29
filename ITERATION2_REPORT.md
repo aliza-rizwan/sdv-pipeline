@@ -59,24 +59,20 @@ Fill this table using experiments/results/latency_comparison.md
 ## 6. Analysis
 
 1. How did the system behave before and after the modification?
-Before the modification, the system operated under stable conditions with no delay or packet loss. Messages flowed continuously through the pipeline from the simulator to the digital twin, and latency values were relatively consistent. No missing messages or irregularities in sequence numbers were observed.
-
-After introducing middleware fault injection, the system behavior changed depending on the configuration. With delay and packet drop enabled, messages were sometimes delayed or dropped entirely. This resulted in more variable system behavior, including gaps in sequence numbers and less consistent update timing. Despite these changes, the system continued to function correctly, and valid messages were still propagated through the pipeline.
+- Before the modification, the system operated under stable conditions with no delay or packet loss. Messages flowed continuously through the pipeline from the simulator to the digital twin, and latency values were relatively consistent. No missing messages or irregularities in sequence numbers were observed.
+- After introducing middleware fault injection, the system behavior changed depending on the configuration. With delay and packet drop enabled, messages were sometimes delayed or dropped entirely. This resulted in more variable system behavior, including gaps in sequence numbers and less consistent update timing. Despite these changes, the system continued to function correctly, and valid messages were still propagated through the pipeline.
 
 2. What changed in the measured metric?
-The measured metric, end-to-end latency, showed noticeable differences between the baseline and modified scenarios. In the baseline scenario, the average latency was approximately 1397 ms. In the modified scenario, the average latency decreased to approximately 1152 ms, while both the 95th percentile and maximum latency values were also reduced.
-
-This indicates that while delay was introduced, the presence of packet drop reduced the number of high-latency messages included in the measurement, resulting in lower overall latency statistics.
+- The measured metric, end-to-end latency, showed noticeable differences between the baseline and modified scenarios. In the baseline scenario, the average latency was approximately 1397 ms. In the modified scenario, the average latency decreased to approximately 1152 ms, while both the 95th percentile and maximum latency values were also reduced.
+- This indicates that while delay was introduced, the presence of packet drop reduced the number of high-latency messages included in the measurement, resulting in lower overall latency statistics.
 
 3. Why did these changes occur?
-The observed changes are directly related to the behavior introduced in the middleware. Delay injection increases the time required for messages to propagate through the system. However, packet drop removes some messages entirely, including those that may have experienced higher latency.
-
-As a result, the dataset in the modified scenario contains fewer high-latency samples, which lowers the average, 95th percentile, and maximum latency values. This demonstrates the interaction between performance and reliability, where reduced reliability can impact observed performance metrics.
+- The observed changes are directly related to the behavior introduced in the middleware. Delay injection increases the time required for messages to propagate through the system. However, packet drop removes some messages entirely, including those that may have experienced higher latency.
+- As a result, the dataset in the modified scenario contains fewer high-latency samples, which lowers the average, 95th percentile, and maximum latency values. This demonstrates the interaction between performance and reliability, where reduced reliability can impact observed performance metrics.
 
 4. Any reliability observations (drops, stale state, slower updates)?
-Yes, reliability-related behavior was observed during the modified scenario. Packet drop resulted in missing messages, which caused gaps in sequence numbers and reduced the consistency of updates in the digital twin. In some cases, this led to temporarily stale state information, as updates were not received at expected intervals.
-
-These observations confirm that the system is capable of simulating unreliable communication conditions and demonstrate how message loss can affect both data consistency and system reliability.
+- Yes, reliability-related behavior was observed during the modified scenario. Packet drop resulted in missing messages, which caused gaps in sequence numbers and reduced the consistency of updates in the digital twin. In some cases, this led to temporarily stale state information, as updates were not received at expected intervals.
+- These observations confirm that the system is capable of simulating unreliable communication conditions and demonstrate how message loss can affect both data consistency and system reliability.
 
 ## 7. Demo Video
 
