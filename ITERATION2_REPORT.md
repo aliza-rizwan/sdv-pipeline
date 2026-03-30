@@ -76,4 +76,4 @@ Fill this table using experiments/results/latency_comparison.md
 
 ## 7. Demo Video
 
-Link: 
+Link: https://drive.google.com/file/d/1n6tCtGZSNrihZKKzIwCIwpYhg4JwTVP3/view?usp=sharing
